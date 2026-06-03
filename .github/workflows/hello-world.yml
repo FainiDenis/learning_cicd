@@ -9,9 +9,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # step 1: use a pre-build action to download your code onto the runner
-      - name: Checkout code
-        uses: actions/checkout@4
+      # step 1: update the system
+      - name: Update the system
+        run: apt update && apt upgrade -y
 
       # step 2: run a basic terminal command
       - name: Greet the user
