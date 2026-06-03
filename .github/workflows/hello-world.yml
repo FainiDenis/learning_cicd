@@ -1,18 +1,76 @@
-name: My first workflow
+name: Create remote user
 
-# The event that triggers this workflow
-on: [push]
+on:
+  workflow_dispatch:
 
 jobs:
-  say-hello:
-    # We are using a github hotsted runner runnin the latest ubuntu
+  create-user:
     runs-on: ubuntu-latest
-
     steps:
-      # step 1: update the system
-      - name: Update the system
-        run: sudo apt update && sudo apt upgrade -y
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # step 2: run a basic terminal command
-      - name: Greet the user
-        run: echo "Hello Denis, good lucky with Github Actions!"
+      - name: Install ssh-agent
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Create remote group & user
+        env:
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_PORT: ${{ secrets.REMOTE_PORT || '22' }}
+        run: |
+          SSH_OPTS="-o StrictHostKeyChecking=no -p ${REMOTE_PORT}"
+          REMOTE="${REMOTE_USER}@${REMOTE_HOST}"
+
+          # Commands to run on the remote host (idempotent)
+          ssh $SSH_OPTS "$REMOTE" bash -s <<'REMOTE_SCRIPT'
+          set -euo pipefail
+
+          TARGET_GROUP="newgroup"
+          TARGET_USER="newuser"
+          USER_HOME="/home/${TARGET_USER}"
+          SSH_PUBKEY="ssh-ed25519 AAAA... user@example.com" # replace with desired public key or leave empty
+
+          # create group if not exists
+          if ! getent group "${TARGET_GROUP}" >/dev/null; then
+            sudo groupadd --force "${TARGET_GROUP}"
+          fi
+
+          # create user if not exists (with home, primary group, bash shell)
+          if ! id -u "${TARGET_USER}" >/dev/null 2>&1; then
+            sudo useradd -m -s /bin/bash -g "${TARGET_GROUP}" "${TARGET_USER}"
+            sudo passwd -l "${TARGET_USER}"  # lock password by default
+          else
+            # ensure primary group is set
+            sudo usermod -g "${TARGET_GROUP}" "${TARGET_USER}" || true
+          fi
+
+          # add to sudo group (optional)
+          if ! id -nG "${TARGET_USER}" | grep -qw "sudo"; then
+            sudo usermod -aG sudo "${TARGET_USER}"
+          fi
+
+          # ensure home dir exists with correct permissions
+          sudo mkdir -p "${USER_HOME}"
+          sudo chown "${TARGET_USER}:${TARGET_GROUP}" "${USER_HOME}"
+          sudo chmod 700 "${USER_HOME}"
+
+          # install SSH key (if provided)
+          if [ -n "$SSH_PUBKEY" ]; then
+            sudo -u "${TARGET_USER}" mkdir -p "${USER_HOME}/.ssh"
+            sudo -u "${TARGET_USER}" chmod 700 "${USER_HOME}/.ssh"
+            echo "$SSH_PUBKEY" | sudo -u "${TARGET_USER}" tee "${USER_HOME}/.ssh/authorized_keys" >/dev/null
+            sudo -u "${TARGET_USER}" chmod 600 "${USER_HOME}/.ssh/authorized_keys"
+          fi
+
+          # add sudoers entry for passwordless sudo (optional)
+          SUDOERS_FILE="/etc/sudoers.d/${TARGET_USER}"
+          if [ ! -f "$SUDOERS_FILE" ]; then
+            echo "${TARGET_USER} ALL=(ALL) NOPASSWD:ALL" | sudo tee "$SUDOERS_FILE" >/dev/null
+            sudo chmod 440 "$SUDOERS_FILE"
+          fi
+
+          echo "User ${TARGET_USER} and group ${TARGET_GROUP} ensured."
+REMOTE_SCRIPT
