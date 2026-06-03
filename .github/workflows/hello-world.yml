@@ -73,4 +73,4 @@ jobs:
           fi
 
           echo "User ${TARGET_USER} and group ${TARGET_GROUP} ensured."
-REMOTE_SCRIPT
+          REMOTE_SCRIPT
