@@ -11,7 +11,7 @@ jobs:
     steps:
       # step 1: update the system
       - name: Update the system
-        run: apt update && apt upgrade -y
+        run: sudo apt update && sudo apt upgrade -y
 
       # step 2: run a basic terminal command
       - name: Greet the user
