@@ -1,4 +1,4 @@
-name: Create remote user
+name: Create local user
 
 on:
   workflow_dispatch:
@@ -7,31 +7,13 @@ jobs:
   create-user:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install ssh-agent
-        uses: webfactory/ssh-agent@v0.8.1
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Create remote group & user
-        env:
-          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
-          REMOTE_PORT: ${{ secrets.REMOTE_PORT || '22' }}
+      - name: Create group & user on runner
         run: |
-          SSH_OPTS="-o StrictHostKeyChecking=no -p ${REMOTE_PORT}"
-          REMOTE="${REMOTE_USER}@${REMOTE_HOST}"
-
-          # Commands to run on the remote host (idempotent)
-          ssh $SSH_OPTS "$REMOTE" bash -s <<'REMOTE_SCRIPT'
           set -euo pipefail
 
-          TARGET_GROUP="newgroup"
-          TARGET_USER="newuser"
+          TARGET_GROUP="myGROUP"
+          TARGET_USER="myUSER1"
           USER_HOME="/home/${TARGET_USER}"
-          SSH_PUBKEY="ssh-ed25519 AAAA... user@example.com" # replace with desired public key or leave empty
 
           # create group if not exists
           if ! getent group "${TARGET_GROUP}" >/dev/null; then
@@ -57,20 +39,4 @@ jobs:
           sudo chown "${TARGET_USER}:${TARGET_GROUP}" "${USER_HOME}"
           sudo chmod 700 "${USER_HOME}"
 
-          # install SSH key (if provided)
-          if [ -n "$SSH_PUBKEY" ]; then
-            sudo -u "${TARGET_USER}" mkdir -p "${USER_HOME}/.ssh"
-            sudo -u "${TARGET_USER}" chmod 700 "${USER_HOME}/.ssh"
-            echo "$SSH_PUBKEY" | sudo -u "${TARGET_USER}" tee "${USER_HOME}/.ssh/authorized_keys" >/dev/null
-            sudo -u "${TARGET_USER}" chmod 600 "${USER_HOME}/.ssh/authorized_keys"
-          fi
-
-          # add sudoers entry for passwordless sudo (optional)
-          SUDOERS_FILE="/etc/sudoers.d/${TARGET_USER}"
-          if [ ! -f "$SUDOERS_FILE" ]; then
-            echo "${TARGET_USER} ALL=(ALL) NOPASSWD:ALL" | sudo tee "$SUDOERS_FILE" >/dev/null
-            sudo chmod 440 "$SUDOERS_FILE"
-          fi
-
           echo "User ${TARGET_USER} and group ${TARGET_GROUP} ensured."
-          REMOTE_SCRIPT
