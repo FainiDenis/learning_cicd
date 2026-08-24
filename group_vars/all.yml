@@ -1,0 +1,8 @@
+---
+timezone: America/New_York         # change if you want
+packages:
+  - curl
+  - git
+  - htop
+  - python3
+  - nginx
