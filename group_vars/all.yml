@@ -1,8 +1,3 @@
----
-timezone: America/New_York         # change if you want
-packages:
-  - curl
-  - git
-  - htop
-  - python3
-  - nginx
+app_name: mywebapp-example
+nginx_worker_connections: 1024
+server_name: example.com

@@ -1,0 +1,45 @@
+name: Ansible Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # allows manual "Run workflow" button
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Add known hosts
+        run: |
+          echo "${{ secrets.ANSIBLE_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+
+      - name: Write vault password file
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass.txt
+
+      - name: Run playbook
+        run: |
+          ansible-playbook playbooks/site.yml \
+            --private-key ~/.ssh/id_ed25519 \
+            --vault-password-file .vault_pass.txt
+
+      - name: Clean up secrets from disk
+        if: always()
+        run: rm -f .vault_pass.txt ~/.ssh/id_ed25519
